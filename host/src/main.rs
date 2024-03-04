@@ -3,6 +3,7 @@
 
 use std::error::Error;
 use std::io::Cursor;
+// use std::io::Cursor;
 use std::time::Duration;
 use tokio::time;
 
@@ -12,37 +13,53 @@ use btleplug::api::{Central, Manager as _, Peripheral, ScanFilter};
 use btleplug::platform::Manager;
 use uuid::Uuid;
 
-// use crate::items;
+// use crate::ble_gatt;
 use prost::Message;
 
-// Include the `items` module, which is generated from items.proto.
-pub mod items {
-    include!(concat!(env!("OUT_DIR"), "/doable.items.rs"));
+// Include the `ble_gatt` module, which is generated from items.proto.
+pub mod ble_gatt {
+    include!(concat!(env!("OUT_DIR"), "/doable.ble_gatt.rs"));
 }
-pub fn create_large_shirt(color: String) -> items::Shirt {
-    let mut shirt = items::Shirt::default();
-    shirt.color = color;
-    shirt.set_size(items::shirt::Size::Large);
-    shirt
+
+pub fn parse_default_gatt(
+    buf: &Vec<u8>,
+) -> Result<ble_gatt::DefaultGattMessage, prost::DecodeError> {
+    ble_gatt::DefaultGattMessage::decode(&mut Cursor::new(buf))
 }
-// pub fn deserialize_shirt(buf: &[u8]) -> Result<items::Shirt, prost::DecodeError> {
-pub fn parse_shirt(buf: &Vec<u8>) -> Result<items::Shirt, prost::DecodeError> {
-    items::Shirt::decode(&mut Cursor::new(buf))
+
+fn pb_test() {
+    let nrfx = ble_gatt::SoftwareVersion {
+        major: 3,
+        minor: 2,
+        patch: 1,
+        url: "na".into(),
+        hash: "na".into(),
+    };
+    let p = ble_gatt::TelemetryToPeripheral {
+        nrfx: Some(nrfx.clone()),
+    };
+    info!("telem to periph = {p:?}");
+
+    let q = ble_gatt::DefaultGattMessage {
+        m: Some(ble_gatt::default_gatt_message::M::Swver(nrfx.clone())),
+    };
+    info!("default gatt message = {q:?}");
+
+    // let r: Vec<u8> = q.into();
+    let r: Vec<u8> = q.clone().encode_to_vec();
+    info!("encoded = {r:?}");
+
+    if let Ok(defgatt) = ble_gatt::DefaultGattMessage::decode(&mut Cursor::new(r)) {
+        // parse_default_gatt(&r) {
+        info!("PB: parsed message = {defgatt:?}");
+    }
 }
 
 #[tokio::main]
 async fn main() -> Result<(), Box<dyn Error>> {
     pretty_env_logger::init();
 
-    let large = create_large_shirt("red".to_string());
-    info!("PB: large shirt = {large:?}");
-
-    let large_bytes = large.encode_to_vec();
-    info!("PB: encoded bytes = {large_bytes:?}");
-
-    if let Ok(shirt) = parse_shirt(&large_bytes) {
-        info!("PB: parsed shirt = {shirt:?}");
-    }
+    pb_test();
     // return Ok(());
 
     let manager = Manager::new().await?;
